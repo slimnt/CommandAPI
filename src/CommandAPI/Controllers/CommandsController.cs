@@ -6,6 +6,9 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using CommandAPI.Data;
 using CommandAPI.Models;
+using AutoMapper;
+using CommandAPI.Dtos;
+using Microsoft.AspNetCore.JsonPatch;
 
 namespace CommandAPI.Controllers
 {
@@ -14,21 +17,24 @@ namespace CommandAPI.Controllers
 	public class CommandsController : ControllerBase
 	{
 		private readonly ICommandAPIRepo _repository;
+		private readonly IMapper _mapper;
 
-		public CommandsController(ICommandAPIRepo repository)
+		public CommandsController(ICommandAPIRepo repository, IMapper mapper)
 		{
 			_repository = repository;
+			_mapper = mapper;
 		}
 
 		[HttpGet]
-		public ActionResult<IEnumerable<Command>> GetAllCommands()
+		public ActionResult<IEnumerable<CommandReadDto>> GetAllCommands()
 		{
 			var commandItems = _repository.GetAllCommands();
-			return Ok(commandItems);
+			var commandItemsReadDtos = _mapper.Map<IEnumerable<CommandReadDto>>(commandItems);
+			return Ok(commandItemsReadDtos);
 		}
 
-		[HttpGet("{id}")]
-		public ActionResult<Command> GetCommandById(int id)
+		[HttpGet("{id}", Name = "GetCommandById")]
+		public ActionResult<CommandReadDto> GetCommandById(int id)
 		{
 			var commandItem = _repository.GetCommandById(id);
 			if (commandItem == null)
@@ -36,7 +42,74 @@ namespace CommandAPI.Controllers
 				return NotFound();
 			}
 
-			return Ok(commandItem);
+			var commandItemReadDto = _mapper.Map<CommandReadDto>(commandItem);
+			return Ok(commandItemReadDto);
+		}
+
+		[HttpPost]
+		public ActionResult<CommandReadDto> CreateCommand(CommandCreateDto commandCreateDto)
+		{
+			var commandModel = _mapper.Map<Command>(commandCreateDto);
+			_repository.CreateCommand(commandModel);
+			_repository.SaveChanges();
+
+			var commandReadDto = _mapper.Map<CommandReadDto>(commandModel);
+
+			return CreatedAtRoute(nameof(GetCommandById), new { commandReadDto.Id }, commandReadDto);
+		}
+
+		[HttpPut("{id}")]
+		public ActionResult UpdateCommand(int id, CommandUpdateDto commandUpdateDto)
+		{
+			var commandModelFromRepo = _repository.GetCommandById(id);
+			if (commandModelFromRepo == null)
+			{
+				return NotFound();
+			}
+
+			_mapper.Map(commandUpdateDto, commandModelFromRepo);
+			_repository.UpdateCommand(commandModelFromRepo);
+			_repository.SaveChanges();
+
+			return NoContent();
+		}
+
+		[HttpPatch("{id}")]
+		public ActionResult PartialCommandUpdate(int id, JsonPatchDocument<CommandUpdateDto> patchDoc)
+		{
+			var commandModelFromRepo = _repository.GetCommandById(id);
+			if (commandModelFromRepo == null)
+			{
+				return NotFound();
+			}
+
+			var commandToPatch = _mapper.Map<CommandUpdateDto>(commandModelFromRepo);
+			patchDoc.ApplyTo(commandToPatch, ModelState);
+			if (!TryValidateModel(commandToPatch))
+			{
+				return ValidationProblem(ModelState);
+			}
+
+			_mapper.Map(commandToPatch, commandModelFromRepo);
+			_repository.UpdateCommand(commandModelFromRepo);
+			_repository.SaveChanges();
+
+			return NoContent();
+		}
+
+		[HttpDelete("{id}")]
+		public ActionResult DeleteCommand(int id)
+		{
+			var commandModelFromRepo = _repository.GetCommandById(id);
+			if (commandModelFromRepo == null)
+			{
+				return NotFound();
+			}
+
+			_repository.DeleteCommand(commandModelFromRepo);
+			_repository.SaveChanges();
+
+			return NoContent();
 		}
 	}
 }
