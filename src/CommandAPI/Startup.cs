@@ -28,7 +28,7 @@ namespace CommandAPI
 		public void ConfigureServices(IServiceCollection services)
 		{
 			services.AddDbContext<CommandContext>(opt =>
-				opt.UseNpgsql(Configuration.GetConnectionString("PostgreSqlConnection")));
+				opt.UseNpgsql(GetNpgsqlConnectionString()));
 
 			services.AddControllers();
 
@@ -50,6 +50,18 @@ namespace CommandAPI
 			{
 				endpoints.MapControllers();
 			});
+		}
+
+		private string GetNpgsqlConnectionString()
+		{
+			var builder = new Npgsql.NpgsqlConnectionStringBuilder()
+			{
+				ConnectionString = Configuration.GetConnectionString("PostgreSqlConnection"),
+				Username = Configuration["UserID"],
+				Password = Configuration["Password"]
+			};
+
+			return builder.ConnectionString;
 		}
 	}
 }
